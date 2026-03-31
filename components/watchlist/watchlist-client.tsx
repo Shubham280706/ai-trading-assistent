@@ -51,9 +51,13 @@ export function WatchlistClient() {
   }, []);
 
   useEffect(() => {
-    void load();
-    const timer = setInterval(() => {
+    const run = () => {
       void load();
+    };
+
+    run();
+    const timer = setInterval(() => {
+      run();
     }, 20000);
     return () => clearInterval(timer);
   }, [load]);

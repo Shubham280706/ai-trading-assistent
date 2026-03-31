@@ -31,13 +31,6 @@ export function StockDetailClient({
   const [liveDigest, setLiveDigest] = useState(newsDigest);
 
   useEffect(() => {
-    setLiveStock(stock);
-    setLiveNews(news);
-    setLiveRecommendation(recommendation);
-    setLiveDigest(newsDigest);
-  }, [stock, news, recommendation, newsDigest]);
-
-  useEffect(() => {
     const load = async () => {
       try {
         const [stockResponse, newsResponse, analysisResponse] = await Promise.all([
@@ -68,6 +61,8 @@ export function StockDetailClient({
         return;
       }
     };
+
+    void load();
 
     const timer = setInterval(() => {
       void load();

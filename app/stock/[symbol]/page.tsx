@@ -12,25 +12,33 @@ export default async function StockDetailPage({
 }) {
   const { symbol } = await params;
 
-  try {
-    const decodedSymbol = decodeURIComponent(symbol);
-    const resolvedSymbol = (await resolveMarketSymbol(decodedSymbol)) ?? decodedSymbol;
-    const [stock, news] = await Promise.all([getStockSnapshot(resolvedSymbol), getStockNews(resolvedSymbol)]);
-    const [recommendation, newsDigest] = await Promise.all([
-      getAiRecommendation(stock, news),
-      getNewsDigest(resolvedSymbol, news)
-    ]);
+  const decodedSymbol = decodeURIComponent(symbol);
+  const resolvedSymbol = (await resolveMarketSymbol(decodedSymbol)) ?? decodedSymbol;
+  const [stock, news] = await Promise.all([
+    getStockSnapshot(resolvedSymbol).catch(() => null),
+    getStockNews(resolvedSymbol).catch(() => null)
+  ]);
 
-    return (
-      <StockDetailClient
-        symbol={resolvedSymbol}
-        stock={stock}
-        news={news}
-        recommendation={recommendation}
-        newsDigest={newsDigest}
-      />
-    );
-  } catch {
+  if (!stock || !news) {
     notFound();
   }
+
+  const [recommendation, newsDigest] = await Promise.all([
+    getAiRecommendation(stock, news).catch(() => null),
+    getNewsDigest(resolvedSymbol, news).catch(() => null)
+  ]);
+
+  if (!recommendation || !newsDigest) {
+    notFound();
+  }
+
+  return (
+    <StockDetailClient
+      symbol={resolvedSymbol}
+      stock={stock}
+      news={news}
+      recommendation={recommendation}
+      newsDigest={newsDigest}
+    />
+  );
 }
