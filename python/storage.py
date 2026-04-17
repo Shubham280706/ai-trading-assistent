@@ -1,21 +1,22 @@
 """
-Persists daily market briefs as JSON files, SQLite, and pushes to the Next.js API
-so the Vercel deployment can serve them from the database.
+Persists daily market briefs as JSON files and auto-pushes to GitHub
+so the Vercel deployment can serve them from the repository filesystem.
 """
 import json
 import logging
+import subprocess
 import sqlite3
 from datetime import date
 from pathlib import Path
 from typing import Any
 
-import httpx
-
-from config import DATA_DIR, NEXT_API_KEY, NEXT_API_URL
+from config import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
 _DB_PATH = DATA_DIR / "market_briefs.db"
+# Resolve the repo root (two levels above python/)
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _init_db() -> sqlite3.Connection:
@@ -32,23 +33,27 @@ def _init_db() -> sqlite3.Connection:
     return conn
 
 
-def _push_to_api(brief: dict[str, Any]) -> None:
-    """POST the brief to the Next.js API so Vercel reads from the DB."""
-    if not NEXT_API_URL or not NEXT_API_KEY:
-        logger.info("NEXT_API_URL/NEXT_API_KEY not set — skipping remote push.")
-        return
-    url = f"{NEXT_API_URL.rstrip('/')}/api/market-brief"
+def _git_push(json_path: Path, brief_date: str) -> None:
+    """Commit the brief JSON and push so Vercel auto-redeploys."""
+    rel = json_path.relative_to(_REPO_ROOT)
     try:
-        resp = httpx.post(
-            url,
-            json=brief,
-            headers={"x-api-key": NEXT_API_KEY},
-            timeout=20,
+        subprocess.run(["git", "add", str(rel)], cwd=_REPO_ROOT, check=True)
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            cwd=_REPO_ROOT,
         )
-        resp.raise_for_status()
-        logger.info("Brief pushed to API: %s → %s", url, resp.status_code)
-    except Exception as exc:
-        logger.warning("Failed to push brief to API (%s): %s", url, exc)
+        if result.returncode == 0:
+            logger.info("Git: nothing new to commit for %s", brief_date)
+            return
+        subprocess.run(
+            ["git", "commit", "-m", f"data: market brief {brief_date} [skip ci]"],
+            cwd=_REPO_ROOT,
+            check=True,
+        )
+        subprocess.run(["git", "push", "origin", "main"], cwd=_REPO_ROOT, check=True)
+        logger.info("Git: pushed market_brief_%s.json → Vercel will redeploy", brief_date)
+    except subprocess.CalledProcessError as exc:
+        logger.warning("Git push failed (brief still saved locally): %s", exc)
 
 
 def save_brief(brief: dict[str, Any]) -> Path:
@@ -72,8 +77,8 @@ def save_brief(brief: dict[str, Any]) -> Path:
     except Exception as exc:
         logger.warning("SQLite save failed: %s", exc)
 
-    # 3. Push to Next.js API (Vercel)
-    _push_to_api(brief)
+    # 3. Push to GitHub → triggers Vercel redeploy
+    _git_push(json_path, today)
 
     return json_path
 
