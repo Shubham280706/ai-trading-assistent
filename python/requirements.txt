@@ -1,0 +1,12 @@
+httpx==0.28.1
+beautifulsoup4==4.13.3
+lxml==5.3.1
+apscheduler==3.11.0
+pytz==2025.2
+python-dotenv==1.1.0
+python-telegram-bot==21.11.1
+feedparser==6.0.11
+rapidfuzz==3.12.2
+sqlite-utils==3.38
+rich==14.0.0
+tenacity==9.1.0

@@ -47,3 +47,26 @@ export type AiRecommendation = {
   sentiment: "Bullish" | "Bearish" | "Neutral";
   reason: string;
 };
+
+export type MarketBriefItem = {
+  company: string;
+  ticker: string;
+  category: string;
+  sentiment: "Positive" | "Negative" | "Neutral";
+  sentiment_score: number;
+  summary: string;
+  title: string;
+  source: string;
+  url: string;
+  date: string;
+  importance_score: number;
+};
+
+export type MarketBrief = {
+  date: string;
+  total_raw: number;
+  total_processed: number;
+  top_5: MarketBriefItem[];
+  top_news: MarketBriefItem[];
+  readable_summary: string;
+};

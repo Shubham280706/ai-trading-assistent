@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useSession, signIn, signOut } from "next-auth/react";
-import { Bell, LayoutDashboard, LogIn, Star, TrendingUp } from "lucide-react";
+import { Bell, LayoutDashboard, LogIn, Newspaper, Star, TrendingUp } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <nav className="hidden items-center gap-2 md:flex">
             <NavLink href="/" label="Dashboard" icon={<LayoutDashboard className="h-4 w-4" />} />
             <NavLink href="/watchlist" label="Watchlist" icon={<Star className="h-4 w-4" />} />
+            <NavLink href="/market-brief" label="Market Brief" icon={<Newspaper className="h-4 w-4" />} />
           </nav>
           <div className="flex items-center gap-3">
             <button className="rounded-2xl border border-border bg-white/5 p-2 text-muted transition hover:text-white">
