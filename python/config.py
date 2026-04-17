@@ -20,6 +20,10 @@ SCHEDULE_MINUTE = int(os.getenv("SCHEDULE_MINUTE", "30"))
 
 TIMEZONE = "Asia/Kolkata"
 
+# Next.js API endpoint to push briefs to (so Vercel deployment can read them)
+NEXT_API_URL = os.getenv("NEXT_API_URL", "")        # e.g. https://yourapp.vercel.app
+NEXT_API_KEY = os.getenv("NEXT_API_KEY", "")        # must match MARKET_BRIEF_API_KEY on Vercel
+
 # NSE/BSE request headers — mimic a real browser session
 BROWSER_HEADERS = {
     "User-Agent": (

@@ -66,3 +66,14 @@ model Watchlist {
 
   @@unique([userId, symbol])
 }
+
+model MarketBrief {
+  id             String   @id @default(cuid())
+  date           String   @unique
+  totalRaw       Int
+  totalProcessed Int
+  top5           Json
+  topNews        Json
+  readableSummary String  @db.Text
+  createdAt      DateTime @default(now())
+}
