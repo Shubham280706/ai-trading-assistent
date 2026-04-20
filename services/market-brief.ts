@@ -1,5 +1,7 @@
 import type { MarketBrief, MarketBriefItem } from "@/lib/types";
 
+type RawItem = { title: string; summary: string; url: string; source: string };
+
 const RSS_FEEDS = [
   { name: "Moneycontrol", url: "https://www.moneycontrol.com/rss/business.xml" },
   { name: "ET Markets", url: "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms" },
@@ -119,7 +121,7 @@ async function fetchGoogleNews(query: string): Promise<{ title: string; summary:
   } catch { return []; }
 }
 
-function dedupe(items: { title: string }[]): typeof items {
+function dedupe(items: RawItem[]): RawItem[] {
   const seen: string[] = [];
   return items.filter(item => {
     const t = item.title.toLowerCase().slice(0,60);
