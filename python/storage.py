@@ -35,7 +35,7 @@ def _init_db() -> sqlite3.Connection:
 
 def _git_push(json_path: Path, brief_date: str) -> None:
     """Commit the brief JSON and push so Vercel auto-redeploys."""
-    rel = json_path.relative_to(_REPO_ROOT)
+    rel = json_path.resolve().relative_to(_REPO_ROOT)
     try:
         subprocess.run(["git", "add", str(rel)], cwd=_REPO_ROOT, check=True)
         result = subprocess.run(
