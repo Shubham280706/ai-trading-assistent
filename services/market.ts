@@ -1,7 +1,9 @@
-import yahooFinance from "yahoo-finance2";
+import YahooFinance from "yahoo-finance2";
 
 import { calculateIndicators } from "@/lib/indicators";
 import type { AnnualDataPoint, Candle, FundamentalData, StockSnapshot } from "@/lib/types";
+
+const yahooFinance = new YahooFinance();
 
 const STOCK_CACHE_TTL_MS = 20_000;
 
@@ -167,7 +169,8 @@ async function fetchYahooSnapshot(symbol: string): Promise<StockSnapshot | null>
       yahooFinance.quote(symbol),
       yahooFinance.chart(symbol, {
         interval: "1d",
-        range: "1y"
+        period1: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000),
+        return: "object",
       })
     ]);
 
@@ -552,10 +555,7 @@ export async function getStockFundamentals(symbol: string): Promise<FundamentalD
   };
 
   try {
-    const summary = await (yahooFinance.quoteSummary as (
-      symbol: string,
-      opts: { modules: string[] }
-    ) => Promise<Record<string, unknown>>)(symbol, {
+    const summary = await yahooFinance.quoteSummary(symbol, {
       modules: [
         "summaryDetail",
         "defaultKeyStatistics",
@@ -565,39 +565,29 @@ export async function getStockFundamentals(symbol: string): Promise<FundamentalD
       ]
     });
 
-    const sd = summary.summaryDetail as Record<string, unknown> | null;
-    const ks = summary.defaultKeyStatistics as Record<string, unknown> | null;
-    const fd = summary.financialData as Record<string, unknown> | null;
-    const ish = summary.incomeStatementHistory as { incomeStatementHistory?: unknown[] } | null;
-    const bsh = summary.balanceSheetHistory as { balanceSheetStatements?: unknown[] } | null;
+    const sd = summary.summaryDetail;
+    const ks = summary.defaultKeyStatistics;
+    const fd = summary.financialData;
+    const incomeRows = summary.incomeStatementHistory?.incomeStatementHistory ?? [];
+    const balanceRows = summary.balanceSheetHistory?.balanceSheetStatements ?? [];
 
-    const num = (obj: Record<string, unknown> | null | undefined, key: string): number | null => {
-      if (!obj) return null;
-      const v = (obj[key] as { raw?: number } | number | null | undefined);
-      if (v === null || v === undefined) return null;
-      if (typeof v === "number") return v;
-      if (typeof v === "object" && "raw" in v) return v.raw ?? null;
-      return null;
-    };
+    // yahoo-finance2 v3 returns typed numbers directly
+    const n = (v: number | null | undefined): number | null =>
+      v === null || v === undefined ? null : v;
 
-    const incomeRows = (ish?.incomeStatementHistory ?? []) as Array<Record<string, unknown>>;
-    const balanceRows = (bsh?.balanceSheetStatements ?? []) as Array<Record<string, unknown>>;
+    const annualHistory: AnnualDataPoint[] = incomeRows.slice(0, 5).map((row) => ({
+      year: row.endDate instanceof Date ? row.endDate.getFullYear() : 0,
+      revenue: n(row.totalRevenue),
+      netIncome: n(row.netIncome),
+    })).filter((r) => r.year > 0).reverse();
 
-    const annualHistory: AnnualDataPoint[] = incomeRows.slice(0, 5).map((row) => {
-      const endDate = (row.endDate as { raw?: number } | null)?.raw;
-      return {
-        year: endDate ? new Date(endDate * 1000).getFullYear() : 0,
-        revenue: num(row, "totalRevenue"),
-        netIncome: num(row, "netIncome"),
-      };
-    }).filter((r) => r.year > 0).reverse();
-
-    // Approximate ROCE from balance sheet + income statement
+    // Approximate ROCE = EBIT / (Total Assets - Current Liabilities)
     let roce: number | null = null;
     if (incomeRows.length > 0 && balanceRows.length > 0) {
-      const ebit = num(incomeRows[0], "ebit") ?? num(incomeRows[0], "operatingIncome");
-      const totalAssets = num(balanceRows[0], "totalAssets");
-      const currentLiabilities = num(balanceRows[0], "totalCurrentLiabilities");
+      const ebit = n(incomeRows[0].ebit);
+      const bs = balanceRows[0] as unknown as Record<string, unknown>;
+      const totalAssets = typeof bs.totalAssets === "number" ? bs.totalAssets : null;
+      const currentLiabilities = typeof bs.totalCurrentLiabilities === "number" ? bs.totalCurrentLiabilities : null;
       if (ebit !== null && totalAssets !== null && currentLiabilities !== null) {
         const capitalEmployed = totalAssets - currentLiabilities;
         if (capitalEmployed > 0) roce = ebit / capitalEmployed;
@@ -605,22 +595,22 @@ export async function getStockFundamentals(symbol: string): Promise<FundamentalD
     }
 
     const partial: Omit<FundamentalData, "fundamentalScore" | "verdict" | "verdictReason"> = {
-      peRatio: num(sd, "trailingPE") ?? num(ks, "trailingPE"),
-      pbRatio: num(ks, "priceToBook"),
-      bookValue: num(ks, "bookValue"),
-      evToEbitda: num(ks, "enterpriseToEbitda"),
-      dividendYield: num(sd, "dividendYield"),
-      dividendRate: num(sd, "dividendRate"),
-      payoutRatio: num(sd, "payoutRatio"),
-      roe: num(fd, "returnOnEquity"),
-      roa: num(fd, "returnOnAssets"),
+      peRatio: n(sd?.trailingPE) ?? n(ks?.trailingPE as number | null | undefined),
+      pbRatio: n(ks?.priceToBook),
+      bookValue: n(ks?.bookValue),
+      evToEbitda: n(ks?.enterpriseToEbitda),
+      dividendYield: n(sd?.dividendYield),
+      dividendRate: n(sd?.dividendRate),
+      payoutRatio: n(sd?.payoutRatio),
+      roe: n(fd?.returnOnEquity),
+      roa: n(fd?.returnOnAssets),
       roce,
-      revenueGrowth: num(fd, "revenueGrowth"),
-      earningsGrowth: num(fd, "earningsGrowth"),
-      profitMargin: num(fd, "profitMargins"),
-      operatingMargin: num(fd, "operatingMargins"),
-      debtToEquity: num(fd, "debtToEquity"),
-      currentRatio: num(fd, "currentRatio"),
+      revenueGrowth: n(fd?.revenueGrowth),
+      earningsGrowth: n(fd?.earningsGrowth),
+      profitMargin: n(fd?.profitMargins),
+      operatingMargin: n(fd?.operatingMargins),
+      debtToEquity: n(fd?.debtToEquity),
+      currentRatio: n(fd?.currentRatio),
       annualHistory,
     };
 
