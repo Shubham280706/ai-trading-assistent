@@ -1,7 +1,7 @@
 import yahooFinance from "yahoo-finance2";
 
 import { calculateIndicators } from "@/lib/indicators";
-import type { Candle, StockSnapshot } from "@/lib/types";
+import type { AnnualDataPoint, Candle, FundamentalData, StockSnapshot } from "@/lib/types";
 
 const STOCK_CACHE_TTL_MS = 20_000;
 
@@ -451,4 +451,182 @@ export async function searchStocks(query: string): Promise<SearchResult[]> {
 
 export async function getTrendingStocks() {
   return Promise.all(fallbackSymbols.map((stock) => getStockSnapshot(stock.symbol)));
+}
+
+function scoreFundamentals(data: Omit<FundamentalData, "fundamentalScore" | "verdict" | "verdictReason">): {
+  score: number;
+  verdict: FundamentalData["verdict"];
+  reason: string;
+} {
+  let score = 0;
+  const reasons: string[] = [];
+
+  const pe = data.peRatio;
+  if (pe !== null) {
+    if (pe < 10) { score += 20; reasons.push("very cheap valuation"); }
+    else if (pe < 20) { score += 15; reasons.push("reasonable P/E"); }
+    else if (pe < 30) { score += 10; }
+    else if (pe < 40) { score += 5; }
+    else { reasons.push("expensive P/E"); }
+  }
+
+  const roe = data.roe;
+  if (roe !== null) {
+    const roePct = roe * 100;
+    if (roePct > 25) { score += 20; reasons.push("excellent ROE"); }
+    else if (roePct > 15) { score += 15; reasons.push("good ROE"); }
+    else if (roePct > 10) { score += 10; }
+    else if (roePct > 5) { score += 5; }
+    else { reasons.push("weak ROE"); }
+  }
+
+  const roce = data.roce;
+  if (roce !== null) {
+    const rocePct = roce * 100;
+    if (rocePct > 20) { score += 15; reasons.push("strong ROCE"); }
+    else if (rocePct > 15) { score += 12; }
+    else if (rocePct > 10) { score += 8; }
+    else if (rocePct > 5) { score += 4; }
+    else { reasons.push("low ROCE"); }
+  }
+
+  const div = data.dividendYield;
+  if (div !== null) {
+    const divPct = div * 100;
+    if (divPct > 3) { score += 10; reasons.push("attractive dividend"); }
+    else if (divPct > 2) { score += 7; }
+    else if (divPct > 1) { score += 4; }
+    else if (divPct > 0) { score += 2; }
+  }
+
+  const de = data.debtToEquity;
+  if (de !== null) {
+    if (de < 0.5) { score += 15; reasons.push("low debt"); }
+    else if (de < 1) { score += 10; }
+    else if (de < 2) { score += 5; }
+    else { reasons.push("high debt"); }
+  }
+
+  const rg = data.revenueGrowth;
+  if (rg !== null) {
+    const rgPct = rg * 100;
+    if (rgPct > 20) { score += 10; reasons.push("strong revenue growth"); }
+    else if (rgPct > 10) { score += 8; }
+    else if (rgPct > 5) { score += 5; }
+    else if (rgPct > 0) { score += 2; }
+    else { reasons.push("declining revenue"); }
+  }
+
+  const pm = data.profitMargin;
+  if (pm !== null) {
+    const pmPct = pm * 100;
+    if (pmPct > 20) { score += 10; reasons.push("high margins"); }
+    else if (pmPct > 15) { score += 8; }
+    else if (pmPct > 10) { score += 5; }
+    else if (pmPct > 5) { score += 3; }
+    else { reasons.push("thin margins"); }
+  }
+
+  const verdict: FundamentalData["verdict"] =
+    score >= 75 ? "Strong Buy" :
+    score >= 55 ? "Good" :
+    score >= 35 ? "Fairly Valued" :
+    score >= 20 ? "Weak" : "Avoid";
+
+  const top = reasons.slice(0, 3).join(", ");
+  const reason = top
+    ? `Score ${score}/100 — ${top}.`
+    : `Fundamental score ${score}/100.`;
+
+  return { score, verdict, reason };
+}
+
+export async function getStockFundamentals(symbol: string): Promise<FundamentalData> {
+  const nullFundamentals: FundamentalData = {
+    peRatio: null, pbRatio: null, bookValue: null, evToEbitda: null,
+    dividendYield: null, dividendRate: null, payoutRatio: null,
+    roe: null, roa: null, roce: null,
+    revenueGrowth: null, earningsGrowth: null, profitMargin: null, operatingMargin: null,
+    debtToEquity: null, currentRatio: null, annualHistory: [],
+    fundamentalScore: 0, verdict: "Fairly Valued", verdictReason: "Insufficient data."
+  };
+
+  try {
+    const summary = await (yahooFinance.quoteSummary as (
+      symbol: string,
+      opts: { modules: string[] }
+    ) => Promise<Record<string, unknown>>)(symbol, {
+      modules: [
+        "summaryDetail",
+        "defaultKeyStatistics",
+        "financialData",
+        "incomeStatementHistory",
+        "balanceSheetHistory",
+      ]
+    });
+
+    const sd = summary.summaryDetail as Record<string, unknown> | null;
+    const ks = summary.defaultKeyStatistics as Record<string, unknown> | null;
+    const fd = summary.financialData as Record<string, unknown> | null;
+    const ish = summary.incomeStatementHistory as { incomeStatementHistory?: unknown[] } | null;
+    const bsh = summary.balanceSheetHistory as { balanceSheetStatements?: unknown[] } | null;
+
+    const num = (obj: Record<string, unknown> | null | undefined, key: string): number | null => {
+      if (!obj) return null;
+      const v = (obj[key] as { raw?: number } | number | null | undefined);
+      if (v === null || v === undefined) return null;
+      if (typeof v === "number") return v;
+      if (typeof v === "object" && "raw" in v) return v.raw ?? null;
+      return null;
+    };
+
+    const incomeRows = (ish?.incomeStatementHistory ?? []) as Array<Record<string, unknown>>;
+    const balanceRows = (bsh?.balanceSheetStatements ?? []) as Array<Record<string, unknown>>;
+
+    const annualHistory: AnnualDataPoint[] = incomeRows.slice(0, 5).map((row) => {
+      const endDate = (row.endDate as { raw?: number } | null)?.raw;
+      return {
+        year: endDate ? new Date(endDate * 1000).getFullYear() : 0,
+        revenue: num(row, "totalRevenue"),
+        netIncome: num(row, "netIncome"),
+      };
+    }).filter((r) => r.year > 0).reverse();
+
+    // Approximate ROCE from balance sheet + income statement
+    let roce: number | null = null;
+    if (incomeRows.length > 0 && balanceRows.length > 0) {
+      const ebit = num(incomeRows[0], "ebit") ?? num(incomeRows[0], "operatingIncome");
+      const totalAssets = num(balanceRows[0], "totalAssets");
+      const currentLiabilities = num(balanceRows[0], "totalCurrentLiabilities");
+      if (ebit !== null && totalAssets !== null && currentLiabilities !== null) {
+        const capitalEmployed = totalAssets - currentLiabilities;
+        if (capitalEmployed > 0) roce = ebit / capitalEmployed;
+      }
+    }
+
+    const partial: Omit<FundamentalData, "fundamentalScore" | "verdict" | "verdictReason"> = {
+      peRatio: num(sd, "trailingPE") ?? num(ks, "trailingPE"),
+      pbRatio: num(ks, "priceToBook"),
+      bookValue: num(ks, "bookValue"),
+      evToEbitda: num(ks, "enterpriseToEbitda"),
+      dividendYield: num(sd, "dividendYield"),
+      dividendRate: num(sd, "dividendRate"),
+      payoutRatio: num(sd, "payoutRatio"),
+      roe: num(fd, "returnOnEquity"),
+      roa: num(fd, "returnOnAssets"),
+      roce,
+      revenueGrowth: num(fd, "revenueGrowth"),
+      earningsGrowth: num(fd, "earningsGrowth"),
+      profitMargin: num(fd, "profitMargins"),
+      operatingMargin: num(fd, "operatingMargins"),
+      debtToEquity: num(fd, "debtToEquity"),
+      currentRatio: num(fd, "currentRatio"),
+      annualHistory,
+    };
+
+    const { score, verdict, reason } = scoreFundamentals(partial);
+    return { ...partial, fundamentalScore: score, verdict, verdictReason: reason };
+  } catch {
+    return nullFundamentals;
+  }
 }

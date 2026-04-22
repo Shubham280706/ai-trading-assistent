@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 
 import { deriveRuleBasedSignal } from "@/lib/indicators";
-import type { AiRecommendation, NewsItem, StockSnapshot } from "@/lib/types";
+import type { AiRecommendation, FundamentalData, NewsItem, StockSnapshot } from "@/lib/types";
 
 const client = process.env.OPENAI_API_KEY
   ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
@@ -9,7 +9,8 @@ const client = process.env.OPENAI_API_KEY
 
 export async function getAiRecommendation(
   stock: StockSnapshot,
-  news: NewsItem[]
+  news: NewsItem[],
+  fundamentals?: FundamentalData
 ): Promise<AiRecommendation> {
   const fallback = deriveRuleBasedSignal(stock.price, stock.indicators);
   const sentimentAverage =
@@ -32,7 +33,7 @@ export async function getAiRecommendation(
         {
           role: "system",
           content:
-            "You are a cautious Indian equities analyst. Return JSON only with shortTerm, longTerm, confidence, sentiment, and reason. Signals must be Buy, Sell, or Hold. Mention RSI, MA, MACD, and news sentiment in the reason. Include a financial-risk-aware tone."
+            "You are a cautious Indian equities analyst. Return JSON only with shortTerm, longTerm, confidence, sentiment, and reason. Signals must be Buy, Sell, or Hold. Mention RSI, MA, MACD, and news sentiment in the reason. If fundamental data is provided, factor in P/E, ROE, ROCE, dividend, and debt levels for the long-term signal. Include a financial-risk-aware tone."
         },
         {
           role: "user",
@@ -41,6 +42,18 @@ export async function getAiRecommendation(
             price: stock.price,
             indicators: stock.indicators,
             changePercent: stock.changePercent,
+            fundamentals: fundamentals ? {
+              peRatio: fundamentals.peRatio,
+              pbRatio: fundamentals.pbRatio,
+              roe: fundamentals.roe,
+              roce: fundamentals.roce,
+              dividendYield: fundamentals.dividendYield,
+              debtToEquity: fundamentals.debtToEquity,
+              revenueGrowth: fundamentals.revenueGrowth,
+              profitMargin: fundamentals.profitMargin,
+              fundamentalScore: fundamentals.fundamentalScore,
+              verdict: fundamentals.verdict,
+            } : null,
             news: news.map((item) => ({
               title: item.title,
               sentimentScore: item.sentimentScore,
@@ -82,8 +95,8 @@ export async function getAiRecommendation(
   }
 }
 
-export async function getAiPayload(stock: StockSnapshot, news: NewsItem[]) {
-  const recommendation = await getAiRecommendation(stock, news);
+export async function getAiPayload(stock: StockSnapshot, news: NewsItem[], fundamentals?: FundamentalData) {
+  const recommendation = await getAiRecommendation(stock, news, fundamentals);
 
   return {
     shortTermSignal: recommendation.shortTerm,

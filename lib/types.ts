@@ -48,6 +48,42 @@ export type AiRecommendation = {
   reason: string;
 };
 
+export type AnnualDataPoint = {
+  year: number;
+  revenue: number | null;
+  netIncome: number | null;
+};
+
+export type FundamentalData = {
+  // Valuation
+  peRatio: number | null;
+  pbRatio: number | null;
+  bookValue: number | null;
+  evToEbitda: number | null;
+  // Dividends
+  dividendYield: number | null;
+  dividendRate: number | null;
+  payoutRatio: number | null;
+  // Returns
+  roe: number | null;
+  roa: number | null;
+  roce: number | null;
+  // Growth & Margins
+  revenueGrowth: number | null;
+  earningsGrowth: number | null;
+  profitMargin: number | null;
+  operatingMargin: number | null;
+  // Financial health
+  debtToEquity: number | null;
+  currentRatio: number | null;
+  // Historical annual data (up to 4 years)
+  annualHistory: AnnualDataPoint[];
+  // Fundamental quality
+  fundamentalScore: number;
+  verdict: "Strong Buy" | "Good" | "Fairly Valued" | "Weak" | "Avoid";
+  verdictReason: string;
+};
+
 export type MarketBriefItem = {
   company: string;
   ticker: string;
