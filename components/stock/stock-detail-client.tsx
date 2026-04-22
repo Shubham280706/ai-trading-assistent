@@ -134,15 +134,35 @@ export function StockDetailClient({
         </Card>
       </section>
 
-      {/* ── Indicators + News ── */}
+      {/* ── Key Metrics + News ── */}
       <section className="grid gap-4 sm:gap-6 lg:grid-cols-[0.8fr_1.2fr]">
         <Card>
-          <p className="text-xs uppercase tracking-[0.25em] text-secondary/80 sm:text-sm">Technical indicators</p>
+          <p className="text-xs uppercase tracking-[0.25em] text-secondary/80 sm:text-sm">Key indicators</p>
           <div className="mt-4 grid gap-2 sm:mt-5 sm:gap-3">
-            <IndicatorRow label="RSI" value={liveStock.indicators.rsi.toFixed(2)} />
-            <IndicatorRow label="MA 50" value={formatCurrency(liveStock.indicators.ma50)} />
-            <IndicatorRow label="MA 200" value={formatCurrency(liveStock.indicators.ma200)} />
-            <IndicatorRow label="MACD" value={liveStock.indicators.macd.toFixed(2)} />
+            <IndicatorRow
+              label="P/E Ratio"
+              value={liveFundamentals?.peRatio != null ? liveFundamentals.peRatio.toFixed(1) : "N/A"}
+              hint={liveFundamentals?.peRatio != null ? (liveFundamentals.peRatio < 20 ? "good" : liveFundamentals.peRatio > 35 ? "bad" : "neutral") : "neutral"}
+            />
+            <IndicatorRow
+              label="Book Value/Share"
+              value={liveFundamentals?.bookValue != null ? `₹${liveFundamentals.bookValue.toFixed(2)}` : "N/A"}
+            />
+            <IndicatorRow
+              label="Dividend Yield"
+              value={liveFundamentals?.dividendYield != null ? `${(liveFundamentals.dividendYield * 100).toFixed(2)}%` : "N/A"}
+              hint={liveFundamentals?.dividendYield != null ? (liveFundamentals.dividendYield > 0.02 ? "good" : "neutral") : "neutral"}
+            />
+            <IndicatorRow
+              label="ROE"
+              value={liveFundamentals?.roe != null ? `${(liveFundamentals.roe * 100).toFixed(1)}%` : "N/A"}
+              hint={liveFundamentals?.roe != null ? (liveFundamentals.roe > 0.15 ? "good" : liveFundamentals.roe < 0.05 ? "bad" : "neutral") : "neutral"}
+            />
+            <IndicatorRow
+              label="ROCE"
+              value={liveFundamentals?.roce != null ? `${(liveFundamentals.roce * 100).toFixed(1)}%` : "N/A"}
+              hint={liveFundamentals?.roce != null ? (liveFundamentals.roce > 0.15 ? "good" : liveFundamentals.roce < 0.05 ? "bad" : "neutral") : "neutral"}
+            />
           </div>
         </Card>
 
@@ -197,11 +217,12 @@ function Metric({ label, value, tone = "default" }: { label: string; value: stri
   );
 }
 
-function IndicatorRow({ label, value }: { label: string; value: string }) {
+function IndicatorRow({ label, value, hint = "neutral" }: { label: string; value: string; hint?: "good" | "bad" | "neutral" }) {
+  const valueClass = hint === "good" ? "text-primary" : hint === "bad" ? "text-danger" : "text-white";
   return (
     <div className="flex items-center justify-between rounded-2xl border border-border bg-white/[0.03] px-3 py-2.5 sm:px-4 sm:py-3">
       <p className="text-xs text-muted sm:text-sm">{label}</p>
-      <p className="text-xs font-medium text-white sm:text-sm">{value}</p>
+      <p className={`text-xs font-medium sm:text-sm ${valueClass}`}>{value}</p>
     </div>
   );
 }
