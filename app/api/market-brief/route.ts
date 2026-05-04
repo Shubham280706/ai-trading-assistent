@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { generateMarketBrief } from "@/services/market-brief";
 
-// Revalidate every hour so Vercel caches the result but refreshes regularly
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {

@@ -1,6 +1,6 @@
 import type { MarketBrief, MarketBriefItem } from "@/lib/types";
 
-type RawItem = { title: string; summary: string; url: string; source: string };
+type RawItem = { title: string; summary: string; url: string; source: string; pub_date?: string };
 
 const RSS_FEEDS = [
   { name: "Moneycontrol", url: "https://www.moneycontrol.com/rss/business.xml" },
@@ -98,8 +98,9 @@ async function fetchFeed(name: string, url: string): Promise<{ title: string; su
       const title = extractTag(block, "title");
       const link = extractTag(block, "link");
       const desc = extractTag(block, "description");
+      const pubDate = extractTag(block, "pubDate");
       if (!title || !isIndiaRelevant(title + " " + desc)) return [];
-      return [{ title, summary: desc.replace(/<[^>]+>/g,"").slice(0,200), url: link, source: name }];
+      return [{ title, summary: desc.replace(/<[^>]+>/g,"").slice(0,200), url: link, source: name, pub_date: pubDate || undefined }];
     });
   } catch { return []; }
 }
@@ -116,7 +117,8 @@ async function fetchGoogleNews(query: string): Promise<{ title: string; summary:
       const parts = raw.split(" - ");
       const source = parts.length > 1 ? parts[parts.length-1] : "Google News";
       const title = parts.length > 1 ? parts.slice(0,-1).join(" - ") : raw;
-      return { title, summary: title, url: extractTag(block,"link"), source };
+      const pubDate = extractTag(block, "pubDate");
+      return { title, summary: title, url: extractTag(block,"link"), source, pub_date: pubDate || undefined };
     }).filter(i => i.title && isIndiaRelevant(i.title));
   } catch { return []; }
 }
@@ -153,12 +155,14 @@ export async function generateMarketBrief(): Promise<MarketBrief> {
       summary: item.summary || item.title,
       title: item.title, source: item.source, url: item.url,
       date: today,
+      pub_date: item.pub_date,
       importance_score: importance(text, cat),
     };
   }).sort((a,b) => b.importance_score - a.importance_score).slice(0,50);
 
   return {
     date: today,
+    scraped_at: new Date().toISOString(),
     total_raw: raw.length,
     total_processed: processed.length,
     top_5: processed.slice(0,5),

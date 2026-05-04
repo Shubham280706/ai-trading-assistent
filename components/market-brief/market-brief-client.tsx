@@ -50,7 +50,20 @@ function CategoryBadge({ category }: { category: string }) {
   );
 }
 
+function formatPubDate(raw?: string): string | null {
+  if (!raw) return null;
+  try {
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return raw;
+    return d.toLocaleString("en-IN", {
+      day: "2-digit", month: "short", year: "numeric",
+      hour: "2-digit", minute: "2-digit", hour12: true,
+    });
+  } catch { return raw; }
+}
+
 function NewsCard({ item, rank }: { item: MarketBriefItem; rank?: number }) {
+  const pubDateStr = formatPubDate(item.pub_date);
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -75,7 +88,12 @@ function NewsCard({ item, rank }: { item: MarketBriefItem; rank?: number }) {
         </div>
         <p className="text-sm leading-relaxed text-slate-300">{item.summary}</p>
         <div className="flex items-center justify-between gap-2 text-xs text-muted">
-          <span>{item.source}</span>
+          <div className="flex items-center gap-2">
+            <span>{item.source}</span>
+            {pubDateStr && (
+              <span className="text-[10px] text-slate-500">{pubDateStr}</span>
+            )}
+          </div>
           {item.url && (
             <a
               href={item.url}
@@ -115,6 +133,17 @@ type Props = {
   initialBrief: MarketBrief | null;
   availableDates: string[];
 };
+
+function formatScrapedAt(iso?: string): string {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString("en-IN", {
+      day: "2-digit", month: "short", year: "numeric",
+      hour: "2-digit", minute: "2-digit", hour12: true,
+    });
+  } catch { return iso; }
+}
 
 const CATEGORIES = [
   "All",
@@ -171,6 +200,11 @@ export function MarketBriefClient({ initialBrief, availableDates }: Props) {
           <p className="mt-1 text-sm text-muted">
             Automated daily digest of high-impact Indian stock market news
           </p>
+          {brief?.scraped_at && (
+            <p className="mt-1 text-xs text-slate-500">
+              Last updated: {formatScrapedAt(brief.scraped_at)}
+            </p>
+          )}
         </div>
 
         {availableDates.length > 0 && (

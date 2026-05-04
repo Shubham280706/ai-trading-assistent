@@ -95,11 +95,13 @@ export type MarketBriefItem = {
   source: string;
   url: string;
   date: string;
+  pub_date?: string;
   importance_score: number;
 };
 
 export type MarketBrief = {
   date: string;
+  scraped_at: string;
   total_raw: number;
   total_processed: number;
   top_5: MarketBriefItem[];
